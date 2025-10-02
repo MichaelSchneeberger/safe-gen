@@ -1,13 +1,13 @@
 # Safe C++ Generator
 
-*SafeGen* is a safe wrapper around std::generator that ensures captured values remain valid through its lifetime.
-This allows for Python-like generator formulations.
+*SafeGen* is a safe wrapper around *std::generator* that ensures captured values remain valid through its lifetime.
+This allows for *Python*-like generator formulations.
 
 ## Motivation
 
-Using std::generator with lambdas that capture local variables is unsafe. The lifetime of the captured variables is tied to the closure, not the generator itself. If the closure is destroyed while the generator is still alive, iteration can access dangling references.
+Using *std::generator* with lambdas that capture local variables is unsafe. The lifetime of the captured variables is tied to the closure, not the generator itself. If the closure is destroyed while the generator is still alive, iteration can access dangling references.
 
-SafeGen solves this problem by:
+*SafeGen* solves this problem by:
 - Storing both the generator-producing closure and the generator instance together in a single owning object.
 - Enforcing that the generator can only be moved or iterated in a safe way.
 

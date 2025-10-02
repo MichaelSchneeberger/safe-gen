@@ -20,7 +20,7 @@ The following operations are provided for working with *SafeGen*:
 
 ## Basic Example
 
-The example below demonstrates how to consume the first element of a *SafeGen* using the `next` function,
+The example below demonstrates how to consume the first element of a *SafeGen* using the `safegen::next` function,
 and then iterate over the remaining elements safely.
 
 ``` cpp
@@ -37,7 +37,7 @@ int main() {
   }};
 
   // Consume first element of the generator
-  auto maybe_next = next(std::move(gen));
+  auto maybe_next = safegen::next(std::move(gen));
 
   if (maybe_next) {
     auto& [first, other] = *maybe_next;

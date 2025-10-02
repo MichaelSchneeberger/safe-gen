@@ -65,6 +65,8 @@ public:
   std::default_sentinel_t end() const { return {}; }
 };
 
+namespace safegen {
+
 // Returns a SafeGen that yields adjacent pairs of elements from the input generator.
 //
 // Example: if th einput generator yields [1, 2, 3, 4]
@@ -124,4 +126,6 @@ std::optional<std::tuple<T, SafeGen<T>>> next(SafeGen<T> && source) {
   auto safe_gen = SafeGen<T>{std::move(rest_gen)};
 
   return std::make_optional(std::tuple<T, SafeGen<T>>{first, std::move(safe_gen)});
+}
+
 }

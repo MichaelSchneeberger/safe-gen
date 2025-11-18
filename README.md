@@ -24,9 +24,10 @@ The example below demonstrates how to consume the first element of a *SafeGen* u
 and then iterate over the remaining elements safely.
 
 ``` cpp
+#include <generator>
 #include <print>
 
-import safegen
+import safegen;
 
 int main() {
   // Create a SafeGen that yields 1, 2, 3

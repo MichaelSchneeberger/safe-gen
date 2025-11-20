@@ -8,7 +8,7 @@ target_sources(safegen
             src/safegen.cppm
 )
 
-target_compile_features(safegen PUBLIC cxx_std_26)
+target_compile_features(safegen PUBLIC cxx_std_23)
 
 install(TARGETS safegen
     FILE_SET CXX_MODULES DESTINATION share/safegen/modules

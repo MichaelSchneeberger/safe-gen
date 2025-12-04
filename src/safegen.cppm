@@ -6,6 +6,8 @@ module;
 #include <iterator>
 #include <cassert>
 #include <optional>
+#include <ranges>
+#include <concepts>
 
 export module safegen;
 
@@ -20,13 +22,13 @@ export module safegen;
 //     generator together in one owning object. This guarantees that captured values stay alive for
 //     as long as the generator is alive.
 //
-// This makes it safe to use std::generator with lambdas that capture local variables.
-export template <typename T>
+export
+template <typename T>
 class SafeGen {
 private:
   // closure returns a generator, which is by definition move-only
   std::move_only_function<std::generator<T>()> _closure;
-  std::generator<T> _gen;
+  std::optional<std::generator<T>> _gen;
 
   // State flags for runtime safety checks, it enforces the following:
   // A Safe Generator cannot simultaneously be moved from and have being() called on it at the same time
@@ -34,13 +36,14 @@ private:
   bool is_begin_called;
 public:
   SafeGen(std::move_only_function<std::generator<T>()> f) 
-    : _closure(std::move(f)), _gen(_closure()), is_moved(false), is_begin_called(false) {}
+    : _closure(std::move(f)), is_moved(false), is_begin_called(false) {}
 
+  // Delete Copy constructor
   SafeGen(const SafeGen & other) = delete;
   SafeGen & operator=(const SafeGen & other) = delete;
 
   SafeGen(SafeGen&& other) noexcept
-    : _closure(std::move(other._closure)), _gen(_closure()), is_moved(false), is_begin_called(false)
+    : _closure(std::move(other._closure)), is_moved(false), is_begin_called(false)
   {
     assert(!other.is_moved && !other.is_begin_called);
     other.is_moved = true;
@@ -51,7 +54,7 @@ public:
     other.is_moved = true;
 
     // move fields
-    _closure = std::move(other._closure); _gen = _closure(); is_moved = false; is_begin_called = false;
+    _closure = std::move(other._closure); is_moved = false; is_begin_called = false;
 
     return *this;
   }
@@ -60,24 +63,54 @@ public:
     assert(!is_moved);
 
     is_begin_called = true;
-    return _gen.begin();
+    _gen = _closure();
+    return _gen.value().begin();
   }
   std::default_sentinel_t end() const { return {}; }
 };
 
 namespace safegen {
 
+template<typename T>
+inline constexpr bool is_generator = false;
+
+template<typename T>
+inline constexpr bool is_generator<std::generator<T>> = true;
+
+template<typename>
+inline constexpr bool is_safe_gen = false;
+
+template<typename T>
+inline constexpr bool is_safe_gen<SafeGen<T>> = true;
+
+template<typename R>
+concept AllowedInput =
+    (is_safe_gen<std::remove_cvref_t<R>> ||
+     (std::ranges::input_range<R> &&
+      !is_generator<std::remove_cvref_t<R>>));
+
 // Returns a SafeGen that yields adjacent pairs of elements from the input generator.
 //
 // Example: if th einput generator yields [1, 2, 3, 4]
 //          the resulting generator yields [(1,2), (2,3), (3,4)]
 //
-export template <typename T>
-SafeGen<std::pair<T, T>> pairwise(SafeGen<T> && source) {
-  auto it = source.begin();
+// export
+// template <typename T>
+// SafeGen<std::pair<T, T>> pairwise(SafeGen<T> && source) {
+export
+template <AllowedInput R>
+auto pairwise(R && source)
+  -> SafeGen<std::pair<
+    std::ranges::range_value_t<R>,
+    std::ranges::range_value_t<R>
+  >>
+{
+  using T = std::ranges::range_value_t<R>;
 
-  // If the source generator is empty, return an empty generator of pairs
-  if (it == std::default_sentinel) {
+  auto it = source.begin();
+  auto end = source.end();
+
+  if (it == end) {
     auto empty_gen = []() -> std::generator<std::pair<T, T>> { co_return; };
     return {empty_gen};
   }
@@ -87,8 +120,8 @@ SafeGen<std::pair<T, T>> pairwise(SafeGen<T> && source) {
   ++it;
 
   // Define a generator lambda that yields consecutive pairs
-  auto gen_pairs = [it = std::move(it), first]() mutable -> std::generator<std::pair<T, T>> {
-    for (; it != std::default_sentinel; ++it) {
+  auto gen_pairs = [it = std::move(it), first, end]() mutable -> std::generator<std::pair<T, T>> {
+    for (; it != end; ++it) {
       auto next = *it;
       co_yield {first, next};
       first = next;
@@ -105,12 +138,19 @@ SafeGen<std::pair<T, T>> pairwise(SafeGen<T> && source) {
 //  - otherwise, a std::tuple containing
 //      (first_element, SafeGen<T> yielding the remaining elements)
 //
-export template <typename T>
-std::optional<std::tuple<T, SafeGen<T>>> next(SafeGen<T> && source) {
+export
+template <AllowedInput R>
+auto next(R && source)
+-> std::optional<std::tuple<std::ranges::range_value_t<R>, SafeGen<std::ranges::range_value_t<R>>>>
+{
+
+  using T = std::ranges::range_value_t<R>;
+
   auto it = source.begin();
+  auto end = source.end();
 
   // If no elements exist, return an empty optional
-  if (it == std::default_sentinel) {
+  if (it == end) {
     return std::nullopt;
   }
 
@@ -119,8 +159,8 @@ std::optional<std::tuple<T, SafeGen<T>>> next(SafeGen<T> && source) {
   ++it;
 
   // Define a generator that yields the remaining elements
-  auto rest_gen = [it = std::move(it)]() mutable -> std::generator<T> {
-    for (; it != std::default_sentinel; ++it) co_yield *it;
+  auto rest_gen = [it = std::move(it), end]() mutable -> std::generator<T> {
+    for (; it != end; ++it) co_yield *it;
   };
 
   auto safe_gen = SafeGen<T>{std::move(rest_gen)};
